@@ -9,6 +9,7 @@
 
 #include <string.h>
 #include <Arduino.h>
+#include <Servo.h>
 #include <SPI.h>
 #if not defined (_VARIANT_ARDUINO_DUE_X_) && not defined (_VARIANT_ARDUINO_ZERO_)
 #include <SoftwareSerial.h>
@@ -58,6 +59,7 @@ Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_
 // idea. What's a better way to do this?
 int rightTurnTime90Degrees;
 
+int angle = 0;
 
 /**************************************************************
    Global Constants and Pin Usage
@@ -91,6 +93,66 @@ void printHex(const uint8_t * data, const uint32_t numBytes);
 
 // the packet buffer
 extern uint8_t packetbuffer[];
+
+
+
+/************************************************************************/
+/*!
+ (SIBA) Sets up the class for using the Servo motor for the robot hand
+ */
+/************************************************************************/
+class Sweeper
+{
+    Servo servo;              // the servo
+    int pos;              // current servo position
+    int increment;        // increment to move for each interval
+    int lowIncrement;
+    int highIncrement;
+    int  updateInterval;      // interval between updates
+    unsigned long lastUpdate; // last update of position
+
+  public:
+    Sweeper(int interval)
+    {
+      updateInterval = interval;
+      lowIncrement = 1;
+      highIncrement = 5;
+    }
+
+    void Attach(int pin)
+    {
+      servo.attach(pin);
+    }
+
+    void Detach()
+    {
+      servo.detach();
+    }
+
+    void Update()
+    {
+      if ((millis() - lastUpdate) > updateInterval) // time to update
+      {
+        lastUpdate = millis();
+        //increment=1;
+        pos += increment;
+        servo.write(pos);
+        Serial.println(pos);
+        if (pos >= 135) 
+        {
+          increment = - lowIncrement;
+        }
+        else if ((pos <= 0)) // end of sweep
+        {
+          // reverse direction
+          //servo.write(0);
+          increment = highIncrement;
+        }
+      }
+    }
+};
+
+Sweeper swee(15);
 
 
 /**************************************************************************/
@@ -174,10 +236,12 @@ void setup(void)
   AFMS.begin();  // create with the default frequency 1.6KHz
   pixels.setPixelColor(3, pixels.Color(0, 0, 150)); // AFMS init
   pixels.show();
-
+  
   // a guess at what might be a right turn
   rightTurnTime90Degrees = 300;
 
+  // (SIBA) Initialise the motor for moving flower
+  swee.Attach(10);
 }
 
 /**************************************************************************/
@@ -194,6 +258,9 @@ void loop(void)
   /* Got a packet! */
   // printHex(packetbuffer, len);
 
+  // (SIBA) This is the motor movement
+  swee.Update();
+  
   // Buttons
   if (packetbuffer[1] == 'B') {
     uint8_t buttnum = packetbuffer[2] - '0';
